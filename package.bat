@@ -1,3 +1,1 @@
-@echo off
-"C:\Program Files\Eclipse Adoptium\jdk-17.0.12.7-hotspot\bin\jar.exe" -cfe RobotMain.jar src.RobotMain src\*.class
-pause
+"C:\Program Files\Java\jdk1.7.0_80\bin\jar" -cfe RobotMain.jar RobotMain -C src .

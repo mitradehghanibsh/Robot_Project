@@ -27,16 +27,4 @@ public class UltrasonicReader implements Runnable {
     }
 }
 
-class UltrasonicBase {
-    public static void main(String[] args) {
-        EV3UltrasonicSensor ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S2);
-        UltrasonicReader sensorLogic = new UltrasonicReader(ultrasonicSensor);
-        Thread sensorThread = new Thread(sensorLogic);
-        sensorThread.setDaemon(true);
-        sensorThread.start();
-        while (!Button.ESCAPE.isDown()) {
-            Delay.msDelay(50);
-        }
-        ultrasonicSensor.close();
-    }
-}
+
