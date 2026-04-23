@@ -7,6 +7,8 @@ import lejos.hardware.sensor.EV3UltrasonicSensor;
 import lejos.hardware.Button;
 import lejos.utility.Delay;
 
+// --- SENSOR READING CLASSES ---
+
 class UltrasonicReader implements Runnable {
     private SampleProvider distanceMode;
     private float[] sample;
@@ -47,24 +49,81 @@ class LightSensorReader implements Runnable {
     }
 }
 
+// --- PID LOGIC ---
+
+class PIDControler {
+    private float KP, KI, KD;
+    private float previousError = 0.0f;
+    private float integral = 0.0f;
+
+    public PIDControler(float KP, float KI, float KD) {
+        this.KP = KP;
+        this.KI = KI;
+        this.KD = KD;
+    }
+
+    public float calculate(float setpoint, float measuredValue) {
+        float error = setpoint - measuredValue;
+        float P = KP * error;
+        integral += error;
+        float I = KI * integral;
+        float derivative = error - previousError;
+        float D = KD * derivative;
+        previousError = error;
+        return P + I + D;
+    }
+
+    public void reset() {
+        previousError = 0.0f;
+        integral = 0.0f;
+    }
+}
+
+// --- LINE RECOVERY LOGIC ---
+
+class LineFinder {
+    private LightSensorReader lightSensor;
+    private final float BLACK_THRESHOLD = 0.45f;
+
+    public LineFinder(LightSensorReader lightSensor) {
+        this.lightSensor = lightSensor;
+    }
+
+    public void findLine(EV3LargeRegulatedMotor left, EV3LargeRegulatedMotor right) {
+        left.setSpeed(180);
+        right.setSpeed(180);
+        left.forward();
+        right.backward(); 
+        while (lightSensor.lightValue > BLACK_THRESHOLD) {
+            Delay.msDelay(10); 
+        }
+        left.stop(true);
+        right.stop();
+        Delay.msDelay(200);
+    }
+}
+
+// --- MAIN ROBOT EXECUTION ---
+
 public class RobotMain {
     public static void main(String[] args) {
-        // Hardware initialization
+        
+        // Setup hardware
         EV3LargeRegulatedMotor mLeft = new EV3LargeRegulatedMotor(MotorPort.B);
         EV3LargeRegulatedMotor mRight = new EV3LargeRegulatedMotor(MotorPort.A);
         EV3ColorSensor sColor = new EV3ColorSensor(SensorPort.S1);
         EV3UltrasonicSensor sUltra = new EV3UltrasonicSensor(SensorPort.S2);
 
-        // Logic setup
+        // Setup threads
         LightSensorReader lightLogic = new LightSensorReader(sColor);
         UltrasonicReader ultraLogic = new UltrasonicReader(sUltra);
         
-        // Modules
+        // Setup modules
         PIDControler pid = new PIDControler(600f, 0f, 200f); 
         ObstacleAvoidance avoidance = new ObstacleAvoidance(ultraLogic);
         LineFinder recovery = new LineFinder(lightLogic);
         
-        // Threads
+        // Start background sensors
         Thread t1 = new Thread(lightLogic);
         Thread t2 = new Thread(ultraLogic);
         t1.setDaemon(true);
@@ -76,23 +135,16 @@ public class RobotMain {
 
         while (!Button.ESCAPE.isDown()) {
             
-            // Check for objects
             if (avoidance.detected()) {
-                // Perform detour
+                // Obstacle state
                 avoidance.avoid(mLeft, mRight);
-                
-                // Return to line
                 recovery.findLine(mLeft, mRight);
-                
-                // Reset PID variables
                 pid.reset();
-                
             } else {
-                // Process PID values
+                // PID Following state
                 float target = 0.45f;
                 float turnPower = pid.calculate(target, lightLogic.lightValue);
                 
-                // Final speed calculation
                 int baseSpeed = 250;
                 mLeft.setSpeed(baseSpeed + turnPower);
                 mRight.setSpeed(baseSpeed - turnPower);
@@ -104,6 +156,7 @@ public class RobotMain {
             Delay.msDelay(20);
         }
 
+        // System shutdown
         mLeft.close();
         mRight.close();
         sColor.close();
