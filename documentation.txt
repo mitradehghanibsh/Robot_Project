@@ -1,1 +1,3 @@
-
+Ermira's role: Implemented obstacle avoidance using ultrasonic sensor data.
+Main function: The class detects nearby objects and controls the motors to steer the robot around obstacles.
+Handling obstacle detection and avoidance using the ultrasonic sensor. Checks whether an obstacle is detected. Moves the robot around an obstacle. Stops, turns, and moves the robot around obstacles.
