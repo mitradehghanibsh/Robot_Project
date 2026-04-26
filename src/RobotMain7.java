@@ -1,122 +1,113 @@
-import lejos.robotics.SampleProvider;
+import lejos.hardware.Button;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
 import lejos.hardware.port.MotorPort;
 import lejos.hardware.port.SensorPort;
 import lejos.hardware.sensor.EV3ColorSensor;
-import lejos.hardware.Button;
+import lejos.hardware.sensor.EV3UltrasonicSensor;
+import lejos.robotics.SampleProvider;
 import lejos.utility.Delay;
 
-// --- SENSOR READING CLASS ---
-
-class LightSensorReader implements Runnable {
-    private SampleProvider lightMode;
-    private float[] sample;
+/**
+ * SensorSystem class runs as a separate thread.
+ * It constantly reads the color and ultrasonic sensors.
+ */
+class SensorSystem implements Runnable {
+    private SampleProvider colorProvider;
+    private SampleProvider distProvider;
+    
+    // volatile ensures the main thread sees updated values instantly
     public volatile float lightValue = 0.0f;
+    public volatile float distanceValue = 1.0f;
 
-    public LightSensorReader(EV3ColorSensor sensor) {
-        this.lightMode = sensor.getRedMode();
-        this.sample = new float[lightMode.sampleSize()];
+    public SensorSystem(EV3ColorSensor sCol, EV3UltrasonicSensor sDist) {
+        this.colorProvider = sCol.getRedMode();
+        this.distProvider = sDist.getDistanceMode();
     }
 
-    @Override
     public void run() {
+        float[] cSample = new float[colorProvider.sampleSize()];
+        float[] dSample = new float[distProvider.sampleSize()];
+        
         while (!Button.ESCAPE.isDown()) {
-            lightMode.fetchSample(sample, 0);
-            lightValue = sample[0];
-            Delay.msDelay(10);
+            colorProvider.fetchSample(cSample, 0);
+            lightValue = cSample[0];
+            
+            distProvider.fetchSample(dSample, 0);
+            distanceValue = dSample[0];
+            
+            Delay.msDelay(15);
         }
     }
 }
 
-// --- PID LOGIC ---
-
-class PIDControler {
-    private float KP, KI, KD;
-    private float previousError = 0.0f;
-    private float integral = 0.0f;
-
-    public PIDControler(float KP, float KI, float KD) {
-        this.KP = KP;
-        this.KI = KI;
-        this.KD = KD;
-    }
-
-    public float calculate(float setpoint, float measuredValue) {
-        float error = setpoint - measuredValue;
-
-        float P = KP * error;
-
-        integral += error;
-        float I = KI * integral;
-
-        float derivative = error - previousError;
-        float D = KD * derivative;
-
-        previousError = error;
-
-        return P + I + D;
-    }
-
-    public void reset() {
-        previousError = 0.0f;
-        integral = 0.0f;
-    }
-}
-
-// --- MAIN ROBOT EXECUTION ---
-
+/**
+ * RobotMain7 is the main execution class.
+ * It manages the robot states: Following, Avoiding, and Recovery.
+ */
 public class RobotMain7 {
     public static void main(String[] args) {
-
+        // Init hardware
         EV3LargeRegulatedMotor mLeft = new EV3LargeRegulatedMotor(MotorPort.B);
         EV3LargeRegulatedMotor mRight = new EV3LargeRegulatedMotor(MotorPort.A);
         EV3ColorSensor sColor = new EV3ColorSensor(SensorPort.S1);
+        EV3UltrasonicSensor sUltra = new EV3UltrasonicSensor(SensorPort.S2);
 
-        LightSensorReader lightLogic = new LightSensorReader(sColor);
-
-        PIDControler pid = new PIDControler(480f, 0f, 140f);
-
-        Thread t1 = new Thread(lightLogic);
+        // Create objects (OOP)
+        SensorSystem sensors = new SensorSystem(sColor, sUltra);
+        PIDControler pid = new PIDControler(500f, 0f, 150f);
+        ObstacleAvoidance avoidance = new ObstacleAvoidance(mLeft, mRight);
+        
+        // Start the sensor thread
+        Thread t1 = new Thread(sensors);
         t1.setDaemon(true);
         t1.start();
 
+        float target = 0.45f; // Threshold for the edge of the line
+        int baseSpeed = 250;
+
         Button.waitForAnyPress();
 
-        float target = 0.45f;
-        int baseSpeed = 320;
-
         while (!Button.ESCAPE.isDown()) {
+            
+            // State: Check for Obstacle
+            if (sensors.distanceValue < 0.20f) {
+                mLeft.stop(true); 
+                mRight.stop();
+                
+                avoidance.doDetour();
+                
+                // State: Recovery (Arcing back to the line)
+                mLeft.setSpeed(150); 
+                mRight.setSpeed(100);
+                mLeft.forward(); 
+                mRight.forward();
+                
+                while(sensors.lightValue > target && !Button.ESCAPE.isDown()) { 
+                    Delay.msDelay(5); 
+                }
+                pid.reset();
+            } 
+            // State: PID Line Following
+            else {
+                float turnPower = pid.calculate(target, sensors.lightValue);
+                
+                int leftSpeed = (int)(baseSpeed + turnPower);
+                int rightSpeed = (int)(baseSpeed - turnPower);
 
-            float turnPower = pid.calculate(target, lightLogic.lightValue);
+                // Speed safety limits
+                mLeft.setSpeed(Math.min(700, Math.max(100, leftSpeed)));
+                mRight.setSpeed(Math.min(700, Math.max(100, rightSpeed)));
 
-            // limit correction so robot does not jerk too much
-            if (turnPower > 160) turnPower = 160;
-            if (turnPower < -160) turnPower = -160;
-
-            int leftSpeed = (int)(baseSpeed + turnPower);
-            int rightSpeed = (int)(baseSpeed - turnPower);
-
-            // keep speeds in safe range
-            if (leftSpeed < 120) leftSpeed = 120;
-            if (rightSpeed < 120) rightSpeed = 120;
-
-            if (leftSpeed > 700) leftSpeed = 700;
-            if (rightSpeed > 700) rightSpeed = 700;
-
-            mLeft.setSpeed(leftSpeed);
-            mRight.setSpeed(rightSpeed);
-
-            mLeft.forward();
-            mRight.forward();
-
-            Delay.msDelay(20);
+                mLeft.forward();
+                mRight.forward();
+            }
+            Delay.msDelay(10);
         }
 
-        mLeft.stop(true);
-        mRight.stop();
-
-        mLeft.close();
-        mRight.close();
-        sColor.close();
+        // Close connections
+        mLeft.close(); 
+        mRight.close(); 
+        sColor.close(); 
+        sUltra.close();
     }
 }

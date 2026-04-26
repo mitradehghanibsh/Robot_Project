@@ -1,53 +1,46 @@
-import lejos.robotics.SampleProvider;
-import lejos.hardware.motor.EV3LargeRegulatedMotor;
-import lejos.hardware.port.MotorPort;
-import lejos.hardware.port.SensorPort;
-import lejos.hardware.sensor.EV3ColorSensor;
-import lejos.hardware.sensor.EV3UltrasonicSensor;
-import lejos.hardware.Button;
-import lejos.utility.Delay;
+/**
+ * PIDControler class handles the math for smooth line following.
+ * It uses Proportional, Integral, and Derivative values to calculate 
+ * the steering correction.
+ */
 public class PIDControler {
-    private float KP , KI , KD ;
+    private float KP, KI, KD;
     private float previousError = 0.0f;
     private float integral = 0.0f;
-    
-public PIDControler(float KP, float KI, float KD) {
+
+    public PIDControler(float KP, float KI, float KD) {
         this.KP = KP;
         this.KI = KI;
         this.KD = KD;
     }
-    // calculate the pid output that control robot moving
-    public float calculate(float setpoint, float measuredValue) {
-        // Current difference between target and measured value
-        float error = setpoint - measuredValue;
-        // Proportional part
-        float P = KP * error;
 
-        // Integral part
+    /**
+     * Calculates the PID output based on the target and current light value.
+     */
+    public float calculate(float setpoint, float measuredValue) {
+        float error = setpoint - measuredValue;
+        
+        // Proportional: How far we are from the line
+        float P = KP * error;
+        
+        // Integral: Sum of errors over time
         integral += error;
         float I = KI * integral;
-
-        // Derivative part
+        
+        // Derivative: How fast we are moving toward/away from the line
         float derivative = error - previousError;
         float D = KD * derivative;
-
-        // Save current error for next step
+        
         previousError = error;
-
-        // Final PID output
+        
         return P + I + D;
-    
     }
 
+    /**
+     * Resets the error history when starting a new movement.
+     */
     public void reset() {
         previousError = 0.0f;
         integral = 0.0f;
     }
-
-    public void setTunings(float KP, float KI, float KD) {
-        this.KP = KP;
-        this.KI = KI;
-        this.KD = KD;
-    }
-
 }

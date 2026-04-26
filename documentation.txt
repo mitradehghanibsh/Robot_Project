@@ -1,4 +1,0 @@
-Ermira's role: Implemented obstacle avoidance using ultrasonic sensor data.
-Main function: The program checks if an obstacle is within a certain distance (15 cm). 
-When an object is detected, the robot stops, turns, and moves forward in steps to go around it.
-It keeps checking if the obstacle is still present and adjusts its movement accordingly.
