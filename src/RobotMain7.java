@@ -54,7 +54,7 @@ public class RobotMain7 {
 
         // Create objects (OOP)
         SensorSystem sensors = new SensorSystem(sColor, sUltra);
-        PIDControler pid = new PIDControler(500f, 0f, 150f);
+        PIDControler pid = new PIDControler(480f, 0f, 140f);
         ObstacleAvoidance avoidance = new ObstacleAvoidance(mLeft, mRight);
         
         // Start the sensor thread
@@ -63,7 +63,7 @@ public class RobotMain7 {
         t1.start();
 
         float target = 0.45f; // Threshold for the edge of the line
-        int baseSpeed = 250;
+        int baseSpeed = 320;
 
         Button.waitForAnyPress();
 
@@ -91,12 +91,19 @@ public class RobotMain7 {
             else {
                 float turnPower = pid.calculate(target, sensors.lightValue);
                 
+                // Limit correction so robot does not jerk too much
+                if (turnPower > 160) turnPower = 160;
+                if (turnPower < -160) turnPower = -160;
+
                 int leftSpeed = (int)(baseSpeed + turnPower);
                 int rightSpeed = (int)(baseSpeed - turnPower);
 
-                // Speed safety limits
-                mLeft.setSpeed(Math.min(700, Math.max(100, leftSpeed)));
-                mRight.setSpeed(Math.min(700, Math.max(100, rightSpeed)));
+                // Speed safety limits and minimum range
+                if (leftSpeed < 120) leftSpeed = 120;
+                if (rightSpeed < 120) rightSpeed = 120;
+                
+                mLeft.setSpeed(Math.min(700, leftSpeed));
+                mRight.setSpeed(Math.min(700, rightSpeed));
 
                 mLeft.forward();
                 mRight.forward();

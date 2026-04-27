@@ -1,1 +1,2 @@
-"C:\Program Files\Java\jdk1.7.0_80\bin\jar" -cfe LineFinder.jar LineFinder -C src .
+jar -cfe RobotMain.jar RobotMain7 -C src .
+pause
