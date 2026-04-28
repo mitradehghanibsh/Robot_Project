@@ -7,6 +7,48 @@ import lejos.hardware.sensor.EV3UltrasonicSensor;
 import lejos.robotics.SampleProvider;
 import lejos.utility.Delay;
 
+
+class PIDControler {
+    private float KP, KI, KD;
+    private float previousError = 0.0f;
+    private float integral = 0.0f;
+
+    public PIDControler(float KP, float KI, float KD) {
+        this.KP = KP;
+        this.KI = KI;
+        this.KD = KD;
+    }
+
+    /**
+     * Calculates the PID output based on the target and current light value.
+     */
+    public float calculate(float setpoint, float measuredValue) {
+        float error = setpoint - measuredValue;
+        
+        // Proportional: How far we are from the line
+        float P = KP * error;
+        
+        // Integral: Sum of errors over time
+        integral += error;
+        float I = KI * integral;
+        
+        // Derivative: How fast we are moving toward/away from the line
+        float derivative = error - previousError;
+        float D = KD * derivative;
+        
+        previousError = error;
+        
+        return P + I + D;
+    }
+
+    /**
+     * Resets the error history when starting a new movement.
+     */
+    public void reset() {
+        previousError = 0.0f;
+        integral = 0.0f;
+    }
+}
 /**
  * SensorSystem class runs as a separate thread.
  * It constantly reads the color sensor.
@@ -46,7 +88,7 @@ class UltrasonicThread implements Runnable {
         while (!Button.ESCAPE.isDown()) {
             distProvider.fetchSample(dSample, 0);
             distanceValue = dSample[0];
-            Delay.msDelay(5); // Ultra-fast polling
+            Delay.msDelay(50); 
         }
     }
 }
@@ -55,7 +97,7 @@ class UltrasonicThread implements Runnable {
  * RobotMain7 is the main execution class.
  * It manages the robot states: Following, Avoiding, and Recovery.
  */
-public class RobotMain7 {
+public class RobotMain10 {
     public static void main(String[] args) {
         // Init hardware
         EV3LargeRegulatedMotor mLeft = new EV3LargeRegulatedMotor(MotorPort.B);
@@ -83,8 +125,8 @@ public class RobotMain7 {
 
         while (!Button.ESCAPE.isDown()) {
             
-            // State: Check for Obstacle (Increased range to 35cm for safety)
-            if (ultraSensor.distanceValue < 0.35f) {
+            // State: Check for Obstacle (Increased range to 20cm for safety)
+            if (ultraSensor.distanceValue < 0.20f) {
                 mLeft.stop(true); 
                 mRight.stop();
                 
@@ -133,7 +175,7 @@ public class RobotMain7 {
                 mLeft.forward();
                 mRight.forward();
             }
-            Delay.msDelay(10);
+            Delay.msDelay(20);
         }
 
         mLeft.close(); mRight.close(); sColor.close(); sUltra.close();

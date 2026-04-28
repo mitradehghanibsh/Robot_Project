@@ -1,3 +1,4 @@
 *.class
 *.jar
-*.bat
+compile.bat
+package.bat
